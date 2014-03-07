@@ -1,0 +1,59 @@
+<?php
+
+/**
+ * Implements hook_form_alter().
+ */
+function tsls_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'taxonomy_form_term' && !isset($form['delete'])) {
+    $form['relations']['synonyms'] = array(
+      '#type' => 'textarea',
+      '#title' => t('Synonyms'),
+      '#default_value' => implode("\n", tsls_get_synonyms($form['tid']['#value'])),
+      '#description' => t('Synonyms of this term, separated by commas.'),
+    );
+
+    $form['#submit'][] = 'tsls_save_term';
+  }
+}
+
+/**
+ * Save new synonyms when term form is submitted.
+ */
+function tsls_save_term($form, &$form_state) {
+  $tid = $form_state['values']['tid'];
+  db_query('DELETE FROM {taxonomy_term_synonym} WHERE tid = :tid', array(':tid' => $tid));
+  if (!empty($form_state['values']['synonyms'])) {
+    foreach (explode("\n", $form_state['values']['synonyms']) as $synonym) {
+      if ($synonym) {
+        db_query('INSERT INTO {taxonomy_term_synonym} (tid, name) VALUES (:tid, :name)', array(':tid' => $tid, ':name' => chop($synonym)));
+      }
+    }
+  }
+}
+
+/**
+ * Implements hook_taxonomy_term_delete().
+ *
+ * Delete term synonmys when the term is deleted.
+ */
+function tsls_taxonomy_term_delete($term) {
+  $tid = $term->tid;
+  db_query('DELETE FROM {taxonomy_term_synonym} WHERE tid = :tid', array(':tid' => $tid));
+}
+
+/**
+ * Return an array of synonyms of the given term ID.
+ */
+function tsls_get_synonyms($tid) {
+  if ($tid) {
+    $synonyms = array();
+    $result = db_query('SELECT name FROM {taxonomy_term_synonym} WHERE tid = :tid', array(':tid' => $tid));
+    foreach ($result as $synonym) {
+      $synonyms[] = $synonym->name;
+    }
+    return $synonyms;
+  }
+  else {
+    return array();
+  }
+}
